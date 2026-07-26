@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Quest for the Truth</title>
+<style>
+  body {
+    margin: 0;
+    background: #111;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+    font-family: sans-serif;
+  }
+  #game-container {
+    box-shadow: 0 0 20px rgba(0,0,0,0.6);
+  }
+</style>
+</head>
+<body>
+
+<div id="game-container"></div>
+
+<!-- This line loads the Phaser game engine from the internet, so you don't have to install anything -->
+<script src="https://cdn.jsdelivr.net/npm/phaser@3.70.0/dist/phaser.min.js"></script>
+
+<!-- This is YOUR game code -->
+<script src="game.js"></script>
+
+</body>
+</html>
