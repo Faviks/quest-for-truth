@@ -47,7 +47,7 @@ let messageText;
 // =========================================================
 function preload() {
   // Your uploaded character image
-  this.load.image('player', 'assets/player.png');
+  this.load.image('player', 'player.png');
 
   const g = this.add.graphics();
 
