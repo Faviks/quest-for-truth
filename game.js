@@ -49,7 +49,7 @@ let messageText;
 // =========================================================
 function preload() {
   // Your uploaded character image
-  this.this.load.image('player', 'player.png');
+  this.load.image('player', 'player.png');
 
   const g = this.add.graphics();
 
