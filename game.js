@@ -30,6 +30,8 @@ let boss;
 let bossHealthBar;
 let bossActive = false;
 let bossHP = 3;
+let lastBossHitTime = 0;
+const BOSS_HIT_COOLDOWN = 800; // milliseconds player is safe after getting hit
 
 let playerHealth = 100;
 let playerEnergy = 100;
@@ -47,7 +49,7 @@ let messageText;
 // =========================================================
 function preload() {
   // Your uploaded character image
-  this.load.image('player', 'player.png');
+  this.load.image('player', 'assets/player.png');
 
   const g = this.add.graphics();
 
@@ -164,7 +166,7 @@ function update() {
   // press SPACE near the boss to "attack" it
   if (bossActive && Phaser.Input.Keyboard.JustDown(keysWASD.SPACE)) {
     const dist = Phaser.Math.Distance.Between(player.x, player.y, boss.x, boss.y);
-    if (dist < 70) {
+    if (dist < 90) {
       bossHP -= 1;
       bossHealthBar.width = Math.max(bossHP, 0) * 20;
       if (bossHP <= 0) {
@@ -206,8 +208,17 @@ function spawnBoss(scene) {
   boss.setVelocity(80, 80);
 
   scene.physics.add.overlap(player, boss, () => {
+    const now = scene.time.now;
+    if (now - lastBossHitTime < BOSS_HIT_COOLDOWN) return; // still safe from last hit
+    lastBossHitTime = now;
+
     playerHealth = Phaser.Math.Clamp(playerHealth - 15, 0, 100);
     updateHUD();
+
+    // push the player away so they're not stuck taking repeat damage
+    const angle = Phaser.Math.Angle.Between(boss.x, boss.y, player.x, player.y);
+    player.setVelocity(Math.cos(angle) * 220, Math.sin(angle) * 220);
+
     if (playerHealth <= 0) loseGame(scene);
   });
 
