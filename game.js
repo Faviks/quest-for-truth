@@ -51,6 +51,9 @@ const TOTAL_ITEMS = 4;
 
 let hudTexts = {};
 let messageText;
+let debugText;
+let startTime = 0;
+let collectLog = [];
 
 // =========================================================
 // PRELOAD: load your uploaded images + draw simple colored
@@ -118,7 +121,7 @@ function create() {
   hudTexts.tokens = this.add.text(300, 12, '', style).setScrollFactor(0);
   hudTexts.xp = this.add.text(440, 12, '', style).setScrollFactor(0);
 
-  messageText = this.add.text(340, 40, '', {
+  messageText = this.add.text(340, 400, '', {
     fontSize: '15px',
     fill: '#ffffff',
     backgroundColor: '#000000aa',
@@ -127,6 +130,12 @@ function create() {
 
   updateHUD();
   showMessage('WASD/arrows to move. Hold SHIFT to shoot!');
+
+  startTime = this.time.now;
+  debugText = this.add.text(16, 435, 'DEBUG: t=0.0s | collected: (none yet)', {
+    fontSize: '12px',
+    fill: '#ffff00'
+  }).setScrollFactor(0);
 }
 
 // =========================================================
@@ -161,7 +170,8 @@ function update() {
   );
   updateHUD();
 
-  // --- shooting ---
+  const elapsed = ((this.time.now - startTime) / 1000).toFixed(1);
+  debugText.setText('DEBUG: t=' + elapsed + 's | collected: ' + (collectLog.length ? collectLog.join(', ') : '(none yet)'));
   if (Phaser.Input.Keyboard.JustDown(shiftKey)) {
     const now = this.time.now;
     if (now - lastShotTime > SHOT_COOLDOWN) {
@@ -222,6 +232,8 @@ function collectItem(player, item) {
   item.destroy();
   itemsCollected += 1;
   tokens += 25;
+  const t = ((game.scene.scenes[0].time.now - startTime) / 1000).toFixed(1);
+  collectLog.push(t + 's');
   showMessage('Collected an item! (' + itemsCollected + '/' + TOTAL_ITEMS + ')');
 }
 
