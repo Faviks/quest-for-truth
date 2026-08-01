@@ -37,6 +37,7 @@ let lastBossHitTime = 0;
 const BOSS_HIT_COOLDOWN = 800; // milliseconds player is safe after getting hit from boss contact
 
 let facing = { x: 0, y: -1 }; // which way the player is currently facing (starts facing up)
+let shiftWasDown = false;
 let lastShotTime = 0;
 const SHOT_COOLDOWN = 350; // milliseconds between shots
 const PROJECTILE_SPEED = 320;
@@ -140,7 +141,7 @@ function create() {
   }).setOrigin(0.5, 0).setScrollFactor(0);
 
   updateHUD();
-  showMessage('WASD/arrows to move. Hold SHIFT to shoot!');
+  showMessage('WASD/arrows to move. Tap SHIFT once to shoot!');
 
   startTime = this.time.now;
   debugText = this.add.text(16, 435, 'DEBUG: t=0.0s | collected: (none yet)', {
@@ -194,13 +195,15 @@ function update() {
     ' | defeats: ' + (defeatLog.length ? defeatLog.join(', ') : '(none yet)')
   );
 
-  if (Phaser.Input.Keyboard.JustDown(shiftKey)) {
+  // fire exactly once per press, no matter how long SHIFT is held down
+  if (shiftKey.isDown && !shiftWasDown) {
     const now = this.time.now;
     if (now - lastShotTime > SHOT_COOLDOWN) {
       lastShotTime = now;
       shootProjectile(this);
     }
   }
+  shiftWasDown = shiftKey.isDown;
 
   // once all items are collected, spawn the final boss
   if (itemsCollected >= TOTAL_ITEMS && !bossActive) {
@@ -311,7 +314,7 @@ function spawnBoss(scene) {
 
   bossHealthBar = scene.add.rectangle(340, 60, 60, 10, 0xE24B4A).setScrollFactor(0);
   bossLabel = scene.add.text(280, 44, 'Hallucination King', { fontSize: '13px', fill: '#ffffff' });
-  showMessage('The Hallucination King appears! Hold SHIFT to shoot it.');
+  showMessage('The Hallucination King appears! Tap SHIFT once to shoot it (needs 3 hits).');
 }
 
 function winGame(scene) {
