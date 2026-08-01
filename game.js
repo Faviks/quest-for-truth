@@ -208,7 +208,7 @@ function spawnItems(scene) {
   itemSpots.forEach(spot => {
     const it = items.create(spot.x, spot.y, 'item');
     it.setImmovable(true);
-    it.setDisplaySize(28, 28); // always render small, no matter the source image's real size
+    it.setDisplaySize(36, 36); // always render clearly visible, no matter the source image's real size
     it.body.setSize(24, 24);   // force a sane, fixed hitbox no matter what
   });
 }
@@ -278,11 +278,15 @@ function spawnBoss(scene) {
   });
 
   // shooting the boss with a projectile is the ONLY way to damage/defeat it
-  scene.physics.add.overlap(projectiles, boss, (proj) => {
+  scene.physics.add.overlap(projectiles, boss, (proj, bossSprite) => {
     proj.destroy();
     bossHP -= 1;
     bossHealthBar.width = Math.max(bossHP, 0) * 20;
-    if (bossHP <= 0) {
+    scene.tweens.add({ targets: bossSprite, alpha: 0.2, duration: 90, yoyo: true });
+
+    if (bossHP > 0) {
+      showMessage('Hit! Hallucination King HP: ' + bossHP + '/3');
+    } else {
       winGame(scene);
     }
   });
