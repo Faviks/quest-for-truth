@@ -24,14 +24,24 @@ const game = new Phaser.Game(config);
 let player;
 let cursors;
 let keysWASD;
+let shiftKey;
 let slimes;
 let items;
+let projectiles;
 let boss;
 let bossHealthBar;
+let bossLabel;
 let bossActive = false;
 let bossHP = 3;
 let lastBossHitTime = 0;
-const BOSS_HIT_COOLDOWN = 800; // milliseconds player is safe after getting hit
+const BOSS_HIT_COOLDOWN = 800; // milliseconds player is safe after getting hit from boss contact
+
+let facing = { x: 0, y: -1 }; // which way the player is currently facing (starts facing up)
+let lastShotTime = 0;
+const SHOT_COOLDOWN = 350; // milliseconds between shots
+const PROJECTILE_SPEED = 320;
+
+let wave = 1;
 
 let playerHealth = 100;
 let playerEnergy = 100;
@@ -43,13 +53,13 @@ let hudTexts = {};
 let messageText;
 
 // =========================================================
-// PRELOAD: draw simple colored-square "sprites" so you don't
-// need any external image files to get started. Swap these
-// for real pixel-art PNGs later (see README).
+// PRELOAD: load your uploaded images + draw simple colored
+// squares for anything you haven't replaced yet.
 // =========================================================
 function preload() {
-  // Your uploaded character image
+  // Your uploaded images
   this.load.image('player', 'player.png');
+  this.load.image('item', 'item.png');
 
   const g = this.add.graphics();
 
@@ -59,16 +69,18 @@ function preload() {
   g.generateTexture('slime', 28, 28);
   g.clear();
 
-  // Item (gold square)
-  g.fillStyle(0xf2c94c, 1);
-  g.fillRect(0, 0, 20, 20);
-  g.generateTexture('item', 20, 20);
-  g.clear();
-
   // Boss (big red square)
   g.fillStyle(0xE24B4A, 1);
   g.fillRect(0, 0, 56, 56);
   g.generateTexture('boss', 56, 56);
+  g.clear();
+
+  // Projectile (small gold dash)
+  g.fillStyle(0xFFD966, 1);
+  g.fillRect(0, 0, 14, 4);
+  g.lineStyle(1, 0xb9861f, 1);
+  g.strokeRect(0, 0, 14, 4);
+  g.generateTexture('projectile', 14, 4);
   g.clear();
 
   g.destroy();
@@ -84,36 +96,16 @@ function create() {
 
   // --- controls ---
   cursors = this.input.keyboard.createCursorKeys();
-  keysWASD = this.input.keyboard.addKeys('W,A,S,D,SPACE');
+  keysWASD = this.input.keyboard.addKeys('W,A,S,D');
+  shiftKey = this.input.keyboard.addKey('SHIFT');
 
-  // --- items to collect (the "features": shield, scroll, crystal, key) ---
+  // --- groups ---
   items = this.physics.add.group();
-  const itemSpots = [
-    { x: 90, y: 90 },
-    { x: 590, y: 90 },
-    { x: 90, y: 370 },
-    { x: 590, y: 370 }
-  ];
-  itemSpots.forEach(spot => {
-    const it = items.create(spot.x, spot.y, 'item');
-    it.setImmovable(true);
-  });
-
-  // --- slime enemies that wander around ---
   slimes = this.physics.add.group();
-  [
-    { x: 200, y: 200 },
-    { x: 480, y: 150 },
-    { x: 350, y: 260 }
-  ].forEach(spot => {
-    const s = slimes.create(spot.x, spot.y, 'slime');
-    s.setCollideWorldBounds(true);
-    s.setBounce(1, 1);
-    s.setVelocity(
-      Phaser.Math.Between(-60, 60),
-      Phaser.Math.Between(-60, 60)
-    );
-  });
+  projectiles = this.physics.add.group();
+
+  spawnItems(this);
+  spawnSlimes(this, 3);
 
   // --- collisions ---
   this.physics.add.overlap(player, items, collectItem, null, this);
@@ -134,23 +126,34 @@ function create() {
   }).setOrigin(0.5, 0).setScrollFactor(0);
 
   updateHUD();
+  showMessage('WASD/arrows to move. Hold SHIFT to shoot!');
 }
 
 // =========================================================
-// UPDATE: runs every frame. Handles movement + boss fight.
+// UPDATE: runs every frame. Handles movement, shooting, and
+// keeps track of which way the player is facing.
 // =========================================================
 function update() {
   const speed = 160;
-  player.setVelocity(0);
+  let vx = 0;
+  let vy = 0;
 
-  if (cursors.left.isDown || keysWASD.A.isDown) player.setVelocityX(-speed);
-  else if (cursors.right.isDown || keysWASD.D.isDown) player.setVelocityX(speed);
+  if (cursors.left.isDown || keysWASD.A.isDown) vx = -1;
+  else if (cursors.right.isDown || keysWASD.D.isDown) vx = 1;
 
-  if (cursors.up.isDown || keysWASD.W.isDown) player.setVelocityY(-speed);
-  else if (cursors.down.isDown || keysWASD.S.isDown) player.setVelocityY(speed);
+  if (cursors.up.isDown || keysWASD.W.isDown) vy = -1;
+  else if (cursors.down.isDown || keysWASD.S.isDown) vy = 1;
+
+  player.setVelocity(vx * speed, vy * speed);
+
+  // remember the last direction we actually moved in, so shooting
+  // knows which way to fire even if we stop moving
+  if (vx !== 0 || vy !== 0) {
+    facing = { x: vx, y: vy };
+  }
 
   // slowly regen energy, drain it a little while moving
-  const isMoving = player.body.velocity.x !== 0 || player.body.velocity.y !== 0;
+  const isMoving = vx !== 0 || vy !== 0;
   playerEnergy = Phaser.Math.Clamp(
     playerEnergy + (isMoving ? -0.05 : 0.05),
     0,
@@ -158,27 +161,63 @@ function update() {
   );
   updateHUD();
 
+  // --- shooting ---
+  if (Phaser.Input.Keyboard.JustDown(shiftKey)) {
+    const now = this.time.now;
+    if (now - lastShotTime > SHOT_COOLDOWN) {
+      lastShotTime = now;
+      shootProjectile(this);
+    }
+  }
+
   // once all items are collected, spawn the final boss
   if (itemsCollected >= TOTAL_ITEMS && !bossActive) {
     spawnBoss(this);
-  }
-
-  // press SPACE near the boss to "attack" it
-  if (bossActive && Phaser.Input.Keyboard.JustDown(keysWASD.SPACE)) {
-    const dist = Phaser.Math.Distance.Between(player.x, player.y, boss.x, boss.y);
-    if (dist < 90) {
-      bossHP -= 1;
-      bossHealthBar.width = Math.max(bossHP, 0) * 20;
-      if (bossHP <= 0) {
-        winGame(this);
-      }
-    }
   }
 }
 
 // =========================================================
 // HELPER FUNCTIONS
 // =========================================================
+function spawnItems(scene) {
+  const itemSpots = [
+    { x: 90, y: 90 },
+    { x: 590, y: 90 },
+    { x: 90, y: 370 },
+    { x: 590, y: 370 }
+  ];
+  itemSpots.forEach(spot => {
+    const it = items.create(spot.x, spot.y, 'item');
+    it.setImmovable(true);
+  });
+}
+
+function spawnSlimes(scene, count) {
+  for (let i = 0; i < count; i++) {
+    const x = Phaser.Math.Between(60, 620);
+    const y = Phaser.Math.Between(70, 430);
+    const s = slimes.create(x, y, 'slime');
+    s.setCollideWorldBounds(true);
+    s.setBounce(1, 1);
+    s.setVelocity(
+      Phaser.Math.Between(-60, 60),
+      Phaser.Math.Between(-60, 60)
+    );
+  }
+}
+
+function shootProjectile(scene) {
+  const p = projectiles.create(player.x, player.y, 'projectile');
+  p.body.allowGravity = false;
+  p.setVelocity(facing.x * PROJECTILE_SPEED, facing.y * PROJECTILE_SPEED);
+  p.rotation = Math.atan2(facing.y, facing.x);
+
+  // clean the projectile up after a bit so they don't pile up forever
+  scene.time.delayedCall(1500, () => {
+    if (p.active) p.destroy();
+  });
+}
+
 function collectItem(player, item) {
   item.destroy();
   itemsCollected += 1;
@@ -207,29 +246,53 @@ function spawnBoss(scene) {
   boss.setBounce(1, 1);
   boss.setVelocity(80, 80);
 
+  // touching the boss hurts the player (with a cooldown so it's not instant death)
   scene.physics.add.overlap(player, boss, () => {
     const now = scene.time.now;
-    if (now - lastBossHitTime < BOSS_HIT_COOLDOWN) return; // still safe from last hit
+    if (now - lastBossHitTime < BOSS_HIT_COOLDOWN) return;
     lastBossHitTime = now;
 
     playerHealth = Phaser.Math.Clamp(playerHealth - 15, 0, 100);
     updateHUD();
 
-    // push the player away so they're not stuck taking repeat damage
     const angle = Phaser.Math.Angle.Between(boss.x, boss.y, player.x, player.y);
     player.setVelocity(Math.cos(angle) * 220, Math.sin(angle) * 220);
 
     if (playerHealth <= 0) loseGame(scene);
   });
 
+  // shooting the boss with a projectile is the ONLY way to damage/defeat it
+  scene.physics.add.overlap(projectiles, boss, (proj) => {
+    proj.destroy();
+    bossHP -= 1;
+    bossHealthBar.width = Math.max(bossHP, 0) * 20;
+    if (bossHP <= 0) {
+      winGame(scene);
+    }
+  });
+
   bossHealthBar = scene.add.rectangle(340, 60, 60, 10, 0xE24B4A).setScrollFactor(0);
-  scene.add.text(280, 44, 'Hallucination King', { fontSize: '13px', fill: '#ffffff' });
-  showMessage('The Hallucination King appears! Get close and press SPACE to attack.');
+  bossLabel = scene.add.text(280, 44, 'Hallucination King', { fontSize: '13px', fill: '#ffffff' });
+  showMessage('The Hallucination King appears! Hold SHIFT to shoot it.');
 }
 
 function winGame(scene) {
-  scene.physics.pause();
-  showMessage('You defeated the Hallucination King! The truth prevails. 🎉', true);
+  // Boss defeated — reward the player and keep the game going,
+  // instead of ending it.
+  tokens += 100;
+  wave += 1;
+
+  boss.destroy();
+  bossHealthBar.destroy();
+  bossLabel.destroy();
+  bossActive = false;
+
+  itemsCollected = 0;
+  spawnItems(scene);
+  spawnSlimes(scene, wave);
+
+  updateHUD();
+  showMessage('The Hallucination King falls! +100 tokens. More hallucinations emerge... (Wave ' + wave + ')', true);
 }
 
 function loseGame(scene) {
@@ -241,7 +304,7 @@ function showMessage(text, permanent) {
   messageText.setText(text);
   if (!permanent) {
     messageText.setAlpha(1);
-    game.scene.scenes[0].time.delayedCall(2000, () => messageText.setText(''));
+    game.scene.scenes[0].time.delayedCall(2200, () => messageText.setText(''));
   }
 }
 
