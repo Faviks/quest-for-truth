@@ -52,8 +52,10 @@ const TOTAL_ITEMS = 4;
 let hudTexts = {};
 let messageText;
 let debugText;
+let bossDebugText;
 let startTime = 0;
 let collectLog = [];
+let defeatLog = [];
 
 // =========================================================
 // PRELOAD: load your uploaded images + draw simple colored
@@ -145,6 +147,11 @@ function create() {
     fontSize: '12px',
     fill: '#ffff00'
   }).setScrollFactor(0);
+
+  bossDebugText = this.add.text(16, 415, 'BOSS DEBUG: no boss active | defeats: (none yet)', {
+    fontSize: '12px',
+    fill: '#00ffff'
+  }).setScrollFactor(0);
 }
 
 // =========================================================
@@ -181,6 +188,12 @@ function update() {
 
   const elapsed = ((this.time.now - startTime) / 1000).toFixed(1);
   debugText.setText('DEBUG: t=' + elapsed + 's | collected: ' + (collectLog.length ? collectLog.join(', ') : '(none yet)'));
+
+  bossDebugText.setText(
+    'BOSS DEBUG: ' + (bossActive ? ('ACTIVE, HP=' + bossHP + '/3') : 'no boss active') +
+    ' | defeats: ' + (defeatLog.length ? defeatLog.join(', ') : '(none yet)')
+  );
+
   if (Phaser.Input.Keyboard.JustDown(shiftKey)) {
     const now = this.time.now;
     if (now - lastShotTime > SHOT_COOLDOWN) {
@@ -299,6 +312,9 @@ function spawnBoss(scene) {
 function winGame(scene) {
   // Boss defeated — reward the player and keep the game going,
   // instead of ending it.
+  const t = ((scene.time.now - startTime) / 1000).toFixed(1);
+  defeatLog.push(t + 's');
+
   tokens += 100;
   wave += 1;
 
