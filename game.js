@@ -64,6 +64,15 @@ function preload() {
   this.load.image('player', 'player.png');
   this.load.image('item', 'item.png');
 
+  // if any file fails to load, show it directly on screen instead of hiding it
+  this.load.on('loaderror', (file) => {
+    this.add.text(16, 80, 'LOAD ERROR: ' + file.key + ' (' + file.src + ')', {
+      fontSize: '13px',
+      fill: '#ff0000',
+      backgroundColor: '#000000'
+    }).setScrollFactor(0);
+  });
+
   const g = this.add.graphics();
 
   // Slime (purple square)
@@ -199,6 +208,8 @@ function spawnItems(scene) {
   itemSpots.forEach(spot => {
     const it = items.create(spot.x, spot.y, 'item');
     it.setImmovable(true);
+    it.setDisplaySize(28, 28); // always render small, no matter the source image's real size
+    it.body.setSize(24, 24);   // force a sane, fixed hitbox no matter what
   });
 }
 
@@ -258,19 +269,12 @@ function spawnBoss(scene) {
   boss.setBounce(1, 1);
   boss.setVelocity(80, 80);
 
-  // touching the boss hurts the player (with a cooldown so it's not instant death)
+  // touching the boss kills the player instantly
   scene.physics.add.overlap(player, boss, () => {
-    const now = scene.time.now;
-    if (now - lastBossHitTime < BOSS_HIT_COOLDOWN) return;
-    lastBossHitTime = now;
-
-    playerHealth = Phaser.Math.Clamp(playerHealth - 15, 0, 100);
+    playerHealth = 0;
     updateHUD();
-
-    const angle = Phaser.Math.Angle.Between(boss.x, boss.y, player.x, player.y);
-    player.setVelocity(Math.cos(angle) * 220, Math.sin(angle) * 220);
-
-    if (playerHealth <= 0) loseGame(scene);
+    showMessage('The Hallucination King overwhelms you!');
+    loseGame(scene);
   });
 
   // shooting the boss with a projectile is the ONLY way to damage/defeat it
