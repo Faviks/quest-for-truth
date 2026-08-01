@@ -275,6 +275,11 @@ function hitSlime(player, slime) {
 }
 
 function spawnBoss(scene) {
+  // safety: clean up any leftover boss visuals from before, just in case
+  if (boss) boss.destroy();
+  if (bossHealthBar) bossHealthBar.destroy();
+  if (bossLabel) bossLabel.destroy();
+
   bossActive = true;
   bossHP = 3;
   boss = scene.physics.add.sprite(340, 100, 'boss');
@@ -321,6 +326,9 @@ function winGame(scene) {
   boss.destroy();
   bossHealthBar.destroy();
   bossLabel.destroy();
+  boss = null;
+  bossHealthBar = null;
+  bossLabel = null;
   bossActive = false;
 
   itemsCollected = 0;
